@@ -1,89 +1,71 @@
-from flask_restful import Resource, reqparse
-from app.models.user import UserModel
-from flask_jwt_extended import create_access_token, jwt_required, get_raw_jwt
-from werkzeug.security import safe_str_cmp
-from blacklist import BLACKLIST
-
-atributos = reqparse.RequestParser()
-atributos.add_argument('username', type=str, required=True, help="campo de nome do usuario e obrigatorio")
-atributos.add_argument('password', type=str, required=True, help="campo de senha e obrigatorio")
-atributos.add_argument('email', type=str, help="campo de email e obrigatorio")
-atributos.add_argument('phone', type=str, help="campo de telefone")
-
-class User(Resource):
-    #/usuarios/{user_id}
-        
-    def get(self, user_id):
-        user = UserModel.find_user(user_id)
-        if user:
-            return user.json()
-        return {"message": 'Usuario nao encontrado'}, 404 # not found
+from app.services import DomainServices, logger
+from app.models import User
+from pprint import pprint
 
 
-    @jwt_required
-    def delete(self, user_id):
-        user = UserModel.find_user(user_id)
-        if user:
-            try:
-                user.delete_user()   
-            except:
-                 return {'message': 'Desculpe foi possivel deletar'}, 500
-            return {'message': 'User deleted'}
-        return {'message': 'User not found.' }, 404
+class UserServices(DomainServices):
+    __model__ = User
 
-class UserRegister(Resource):
-    def post(self):
-        dados = atributos.parse_args()
-
-        username = dados['username']
-        password = dados['password']
-        
-        if UserModel.find_by_login(dados['username']):
-            return {'message': "Esse usuario '{}' ja existe.".format(dados['username'])}
-        
-        salt = UserModel.get_new_salt()
-
-        encrypted_password = UserModel.password_encrypted(password, salt)
-                
-        if not UserModel.email_validator(dados['email']):
-            return {'message': "Email '{}' esta invalido.".format(dados["email"])}, 400
-
-        dados = {**dados, **{ 'salt': salt, 'password': encrypted_password }}
-
-        user = UserModel(**dados)
-
-        user.save_user()
-
-        return {'message':'Usuario Criado com sucesso!'}, 201
-
-
-        
-
-class UserLogin(Resource):
-
-
-    @classmethod
-    def post(cls):
-        dados = atributos.parse_args()
-
-        username = dados['username'].strip()
-        password = dados['password'].strip()
-
-        user = UserModel.find_by_login(username)
-
-        encrypted_password = UserModel.password_encrypted(password, user.salt)
-
-        if not user.assert_password(password):
-            return {'status': False}, 400
     
-        token_de_acesso = create_access_token(identity=user.id)
-        
-        return {'acess_token': token_de_acesso}, 200
-            
+    def __init__(self, request, *args, **kwargs):
+        super().__init__(request, *args, **kwargs)
 
-class UserLogout(Resource):
-    @jwt_required
-    def post(self):
-        jwt_id = get_raw_jwt()['jti']
-        BLACKLIST.add(jwt_id)
-        return {'message' : 'Deslogado com sucesso!'}, 200
+
+    def after_find(self, data, *args, **kwargs):
+        pprint(data)
+
+        
+    def reset(self, *args, **kwargs):
+        
+        self.validate(self._body_params, ['CURRENT_PASSWORD', 'NEW_PASSWORD'])
+        # Padrão de mensagem: {'CURRENT_PASSWORD': '', 'NEW_PASSWORD': ''}
+        
+        user = self.get_session()['log']['user']
+
+        if user.crypt_password(self._body_params['CURRENT_PASSWORD'], user.SALT) != \
+            user.PASSWORD:
+
+            self.raise_error("A senha atual não corresponde à cadastrada. Verifique ela, por favor.")
+        
+        user.PASSWORD = user.crypt_password(self._body_params['NEW_PASSWORD'], user.SALT)
+
+        self.add_message("Senha alterada com sucesso.")
+
+        self._process_result = user._id
+
+        user.save()
+
+
+    def send_password(
+        self,
+        username, 
+        email, 
+        password,
+        assunto='Senha Criada - Resolute', 
+        *args, 
+        **kwargs):
+        
+        from app import config
+        from app.services.email import EmailService
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        # Construct email
+        msg = MIMEMultipart('alternative')
+        msg['To'] = email
+        msg['From'] = config.EMAIL_SENT_FROM
+        msg['Subject'] = assunto
+        
+        body = "Olá {}, como vai?\n\nSegue a senha criada para acesso: {}\n\nAtenciosamente,"\
+            .format(username, password)
+
+        mime = MIMEText(body, 'plain')
+        msg.attach(mime)        
+        
+        email_service = EmailService()
+        email_service.send_smtp(
+            config.EMAIL_SENT_FROM, 
+            email, 
+            msg.as_string())
+
+

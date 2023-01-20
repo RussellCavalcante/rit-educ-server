@@ -1,49 +1,43 @@
-# import os.path
-# basedir = os.path.abspath(os.path.dirname(__file__))
 
+class BaseConfig(object):
+    DEBUG_MODE = ('DEV', 'LOCAL', 'DEBUG')
 
-from flask import Flask, jsonify
-from flask_restful import Resource, Api 
-from flask_jwt_extended import JWTManager
-from blacklist import BLACKLIST
-from flask_cors import CORS
-from app.services.user import *
-from flask_migrate import Migrate, MigrateCommand
-from flask_sqlalchemy import SQLAlchemy
-from app import server, jwt, banco
-from app.blueprints import avaliable_route
+    from os import getenv
 
+    DEBUG = None
 
-server.register_blueprint(avaliable_route)
+    """
+    Usuários Responsáveis pelo Sistema:
+    """
+    APP_USERS_ADMINS = ['russell@resoluteit.com.br']
+    EMAIL_SENT_FROM = 'noreply@resoluteit.com.br'
+    EMAIL = 'noreply@resoluteit.com.br'
+    PASSWORD = "resolute2@2@"
 
-# SQLALCHEMY_DATABASE_URI = 'postgres://russellcavalcante:1128@localhost:5432/rit_educ_database'
-server.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://russellcavalcante:1128@localhost:5432/rit_educ_database'
-server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-SQLALCHEMY_TRACK_MODIFICATIONS = False
-server.config['JWT_SECRET_KEY'] = 'DontTellAnyone'
-server.config['JWT_BLACKLIST_ENABLED'] = True
+    """
+    Dados para geração de tokens JWT
+    """
+    JWT_EXPIRATION_TIME = int(getenv('JWT_EXPIRATION_TIME', 1440 * 7 * 4))
+    JWT_SECRET_KEY = getenv('JWT_SECRET_KEY', 'aula_plus_jwt_secret_key')
 
-@server.before_first_request
-
-def cria_banco():
-    banco.create_all()
+    DB_CONVENTION = {
+        "ix": "ix_%(column_0_label)s",
+        "uq": "uq_%(table_name)s_%(column_0_name)s",
+        "ck": "ck_%(table_name)s_%(column_0_name)s", 
+        "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+        "pk": "pk_%(table_name)s"
+        }
     
+    UPLOAD_FOLDER       = 'files'
+    UPLOAD_CONCLUDED    = 'concluded-files'
+    UPLOAD_TMP_FOLDER   = 'tmp-files'
+    ALLOWED_EXTENSIONS  = ['txt', 'pdf', 'docx', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'webm', 'doc', 'ppt']
 
 
-@jwt.token_in_blacklist_loader
-def verifica_blacklist(token):
-    return token['jti'] in BLACKLIST
-
-@jwt.revoked_token_loader
-def token_de_acesso_invalidado():
-    return jsonify({'message': 'vc foi deslogado'}), 401
-
-
-# DEBUG = True
-
-
-# SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'storage.db')
-# server.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://russellcavalcante:1128@localhost:5432/rit_educ_database'
-# SQLALCHEMY_TRACK_MODIFICATIONS =  True
-
-# SECRET_KEY = 'UM-NOME-BEM-SEGURO'
+    ADMINISTRATORS_ID               = '04d57019-d565-4396-b965-eff652c2901e'
+    SCHOOL_NET_ADMINISTRATOR_ID     = 'c731e359-37de-4328-919a-952dc79dab52'
+    SCHOOL_UNIT_ADMINISTRATOR_ID    = 'fe0b5a65-3649-4903-a7f0-cf9094ea903f'
+    COORDINATORS_ID                 = 'e137434b-c48d-4377-9466-ae4a432344dd'
+    TEACHERS_ID                     = '90462bf5-10a0-48b0-8ef0-e0d79c5e10cf'
+    AUXILIARY_ID                    = 'e9b44444-a203-49cd-a820-283bfc066046'
+    STUDENTS_ID                     = '344c0d50-1e20-4eed-af4a-ab4639addb40'
